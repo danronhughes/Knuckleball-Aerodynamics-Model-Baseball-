@@ -1,0 +1,486 @@
+import java.util.Random; // Importing the Random class for generating random numbers.
+import java.util.Scanner; // Importing the Scanner class for reading user input.
+
+public class TicTacToeHug // Creates new class called TicTacToeHug.
+
+{
+
+    public static final int max_value = 1000000000; // Declaring a constant variable max_value with the value 1000000000.
+    public static final int min_value = -1000000000; // Declaring a constant variable min_value with the value -1000000000.
+
+    public static void main(String[] args) // Main method to start the program.
+   
+    {
+       
+        Scanner scanner = new Scanner(System.in); // Creates a scanner object for user input.
+        int playerScore = 0; // Initializes player score.
+        int computerScore = 0; // Initializes computer score.
+
+        boolean playAgain = true; // Boolean variable to control the play loop.
+        while (playAgain) // While loop to continue playing until user ends the program.
+       
+        {
+           
+            System.out.println("Choose game mode: "); // Prompts user to choose game mode.
+            System.out.println("1. Easy Mode"); // Displays option for easy mode.
+            System.out.println("2. Hard Mode"); // Displays option for hard mode.
+
+            int choice = getIntInput(scanner); // Gets integer input from user.
+
+            int result = 0; // Initializes variable to store game result.
+            switch (choice) // Switch statement based on user's choice.
+           
+            {
+             
+                case 1: // If player chooses easy mode.
+                    result = playEasyMode(scanner); // Calls method for easy mode.
+                    break;
+                case 2: // If player chooses hard mode.
+                    result = playHardMode(scanner); // Calls method for hard mode.
+                    break;
+                default: // If the user enters an invalid choice
+                    System.out.println("Invalid choice. Exiting Program"); // Displays error message.
+                    playAgain = false; // Setting playAgain loop to false to exit the loop.
+                    continue; // Skipping the rest of the loop and starting from the beginning.
+           
+            }
+
+            if (result == 1) // If computer wins.
+           
+            {
+             
+                computerScore++; // Increments computer's score.
+           
+            }
+           
+            else if (result == -1) // If player wins.
+           
+            {
+           
+                playerScore++; // Increments player's score.
+           
+            }
+
+            System.out.println("Player Score: " + playerScore); // Displays player's score.
+            System.out.println("Computer Score: " + computerScore); // Displays computer's score.
+
+            System.out.println("Do you want to play again?"); // Asks user if they want to play again.
+            System.out.println("1. Yes"); // Displays the option to play again.
+            System.out.println("2. No"); // Displays the option to quit.
+            playAgain = getPlayAgainInput(scanner); // Getting user input to play again or quit.
+       
+        }
+
+        scanner.close(); // Closes scanner.
+   
+    }
+
+    public static int playEasyMode(Scanner scanner) // Method to play easy mode.
+   
+    {
+       
+       char[][] gameBoard =
+       
+        {
+           
+            {' ', ' ', ' '}, // First row.
+            {' ', ' ', ' '}, // Second row.
+            {' ', ' ', ' '} // Third row.
+       
+        };
+
+        char currentPlayer = 'O'; // Sets the initial player to "O."
+        boolean gameWon = false; // Boolean to check if the game is won.
+
+        while (!gameWon && !boardFull(gameBoard)) // Loop until the game is won or the board is full.
+       
+        {
+           
+            printGameBoard(gameBoard); // Prints the current state of the board.
+            if (currentPlayer == 'O') // If it's the player's turn.
+           
+            {
+
+            humanMove(gameBoard, scanner); // Player makes a move.
+           
+            }
+           
+            else
+           
+            {
+             
+                makeRandomMove(gameBoard, 'X'); // Computer makes a random move.
+           
+            }
+
+            gameWon = checkWinner(gameBoard, currentPlayer); // Checks if the current player has won.
+            if (gameWon)
+           
+            {
+               
+                System.out.println("Player " + currentPlayer + " wins!"); // Announces the winner.
+                return currentPlayer == 'O' ? -1 : 1; // Returns -1 if player wins, 1 if computer wins.
+           
+            }
+           
+            else if (boardFull(gameBoard))
+           
+            {
+           
+                System.out.println("It's a tie!"); // Announces it's a tie.
+                return 0; // Returns 0 for a tie.
+           
+            }
+
+           
+            currentPlayer = (currentPlayer == 'O') ? 'X' : 'O'; // Switches the current player.
+       
+        }
+
+       
+        return 0; // Returns 0 if the loop exits without a win or tie.
+   
+    }
+
+    public static int playHardMode(Scanner scanner) // Method to play hard mode.
+   
+    {
+       
+        char[][] gameBoard =
+       
+        {
+         
+            {' ', ' ', ' '}, // First row.
+            {' ', ' ', ' '}, // Second row.
+            {' ', ' ', ' '} // Third row.
+       
+        };
+
+        while (true) // Loop until the game is finished.
+       
+        {
+           
+            computerMove(gameBoard); // Computer makes a move using the minimax.
+            printGameBoard(gameBoard); // Prints the current state of the game board.
+            if (hasContestantWon(gameBoard, 'X')) // Checks if the computer won.
+           
+            {
+             
+                return 1; // Returns 1 if the computer wins.
+           
+            }
+
+            if (boardFull(gameBoard)) // Checks if the board is full and game is a tie.
+           
+            {
+           
+                System.out.println("It's a tie!"); // Announces it's a tie.
+                return 0; // Returns 0 for a tie.
+           
+            }
+
+            humanMove(gameBoard, scanner); // Player makes a move.
+            printGameBoard(gameBoard); // Prints the current state of the game board.
+            if (hasContestantWon(gameBoard, 'O')) // Checks if the player won.
+           
+            {
+           
+                return -1; // Returns -1 if the player wins.
+           
+            }
+
+            if (boardFull(gameBoard)) // Checks if the board is full and game is a tie.
+           
+            {
+             
+                System.out.println("It's a tie!"); // Announces it's a tie.
+                return 0; // Returns 0 for a tie.
+           
+            }
+       
+        }
+   
+    }
+
+    public static void computerMove(char[][] board) // Method for the computer to make a move.
+   
+    {
+     
+        int[] bestMove = minimax(board, 0, true); // Calls minimax to get the best move.
+        board[bestMove[1]][bestMove[2]] = 'X'; // Makes the best move on the board.
+   
+    }
+
+    public static void humanMove(char[][] board, Scanner scanner) // Method for the player to make a move.
+   
+    {
+       
+        int row, col; // Variables to store row and column.
+        while (true) // Loop until a valid move is made.
+       
+        {
+           
+            System.out.print("Enter your move (row and column: 1, 2, or 3): "); // Prompts user to enter a move.
+            row = getIntInput(scanner) - 1; // Gets row input and converts to 0 based index.
+            col = getIntInput(scanner) - 1; // Gets column input and converts to 0 based index.
+            if (row >= 0 && row < 3 && col >= 0 && col < 3 && board[row][col] == ' ') // Checks if the move is valid.
+           
+            {
+           
+                board[row][col] = 'O'; // Makes the move on the board.
+                break; // Exits the loop.
+           
+            }
+           
+            else
+           
+            {
+             
+                System.out.println("This move is not valid. Try again."); // Prompts the user to try again.
+           
+            }
+       
+        }
+   
+    }
+
+    public static int[] minimax(char[][] board, int depth, boolean isMaximizing) // Minimax algorithm to find the best move.
+   
+    {
+       
+        if (hasContestantWon(board, 'X')) // Checks if "X" has won.
+       
+        {
+       
+            return new int[]{10 - depth}; // Returns the score for "X" win, adjusted by depth.
+       
+        }
+
+       
+        if (hasContestantWon(board, 'O')) // Checks if "O" has won.
+       
+        {
+       
+            return new int[]{depth - 10}; // Returns score for "O" win, adjusted by depth.
+       
+        }
+
+        if (boardFull(board)) // Checks if board is full.
+       
+        {
+         
+            return new int[]{0}; // Returns score for a tie.
+       
+        }
+
+        int[] bestMove = new int[3]; // Array to store the best move and its score.
+        bestMove[0] = isMaximizing ? min_value : max_value; // Initializes best score for maximizing or minimizing player.
+
+        for (int i = 0; i < 3; i++) // Searches through rows.
+       
+        {
+           
+            for (int j = 0; j < 3; j++) // Searches through columns.
+           
+            {
+               
+                if (board[i][j] == ' ') // Checks if the cell is empty.
+               
+                {
+                   
+                    board[i][j] = isMaximizing ? 'X' : 'O'; // Makes a move for the current player.
+                    int currentScore = minimax(board, depth + 1, !isMaximizing)[0]; // Repeatedly calls minimax for the next move.
+                    board[i][j] = ' '; // Undoes the move to try the next possible move.
+                    if (isMaximizing) // If it's the maximizing player's turn.
+                   
+                    {
+                       
+                        if (currentScore > bestMove[0]) // Checks if the current score is better than the best score.
+                       
+                        {
+                         
+                            bestMove[0] = currentScore; // Updates the best score.
+                            bestMove[1] = i; // Updates the best move's row.
+                            bestMove[2] = j; // Updates the best move's column.
+                       
+                        }
+                   
+                    }
+                   
+                    else
+                   
+                    {
+                       
+                        if (currentScore < bestMove[0]) // Checks if the current score is worse than the best score.
+                       
+                        {
+                       
+                            bestMove[0] = currentScore; // Updates the best score.
+                            bestMove[1] = i; // Updates the best move's row.
+                            bestMove[2] = j; // Updates the best move's column.
+                       
+                        }
+                   
+                    }
+               
+                }
+           
+            }
+       
+        }
+       
+        return bestMove; // Returns the best move and its score.
+   
+    }
+
+    public static boolean hasContestantWon(char[][] board, char symbol) // Checks if a contestant has won.
+   
+    {
+       
+        for (int i = 0; i < 3; i++) // Searches through rows and columns.
+       
+        {
+           
+            if ((board[i][0] == symbol && board[i][1] == symbol && board[i][2] == symbol) || // Checks rows for a win.
+                (board[0][i] == symbol && board[1][i] == symbol && board[2][i] == symbol)) // Checks columns for a win.
+           
+            {
+             
+                return true; // Returns true if a win is found.
+           
+            }
+       
+        }
+       
+        return (board[0][0] == symbol && board[1][1] == symbol && board[2][2] == symbol) || // Checks the main diagonal for a win.
+               (board[0][2] == symbol && board[1][1] == symbol && board[2][0] == symbol); // Checks the anti-diagonal for a win.
+   
+    }
+
+    public static boolean boardFull(char[][] board) // Checks if the board is full.
+   
+    {
+       
+        for (int i = 0; i < 3; i++) // Searches through rows and columns.
+       
+        {
+           
+            for (int j = 0; j < 3; j++)
+           
+            {
+               
+                if (board[i][j] == ' ') // Checks if a cell is empty.
+               
+                {
+               
+                    return false; // Returns false if an empty cell is found.
+               
+                }
+           
+            }
+       
+        }
+       
+        return true; // Returns true if no empty cells are found.
+   
+    }
+
+    public static void printGameBoard(char[][] gameBoard) // Prints the current state of the game board.
+   
+    {
+       
+        for (int i = 0; i < 3; i++) // Iterates through rows.
+       
+        {
+           
+            for (int j = 0; j < 3; j++) // Iterates through columns.
+           
+            {
+               
+                System.out.print(gameBoard[i][j]); // Prints the current cell.
+                if (j < 2)
+               
+                {
+                 
+                    System.out.print("|"); // Prints a vertical separator between cells.
+               
+                }
+           
+            }
+           
+            System.out.println(); // Moves to the next line after a row is printed.
+            if (i < 2)
+           
+            {
+             
+                System.out.println("-----"); // Prints a horizontal separator between rows.
+           
+            }
+       
+        }
+   
+    }
+
+    public static void makeRandomMove(char[][] board, char symbol) // Makes a random move for the computer.
+   
+    {
+       
+        Random rand = new Random(); // Creates a new random number generator.
+        int row, col; // Variables to store the row and column of the move.
+        do
+       
+        {
+           
+            row = rand.nextInt(3); // Generates a random row index.
+            col = rand.nextInt(3); // Generates a random column index.
+       
+        }
+       
+        while (board[row][col] != ' '); // Repeats until an empty cell is found.
+        board[row][col] = symbol; // Makes the move on the board.
+   
+    }
+
+   
+    public static int getIntInput(Scanner scanner) // Method to get integer input from the user.
+   
+    {
+       
+        while (!scanner.hasNextInt()) // While the input is not an integer.
+       
+        {
+         
+            System.out.println("Invalid input. Please enter a number."); // Displays an error message.
+            scanner.next(); // Consumes the invalid input.
+       
+        }
+       
+        return scanner.nextInt(); // Returns the valid integer input.
+   
+    }
+
+    public static boolean getPlayAgainInput(Scanner scanner) // Method to get the user's choice to play again.
+   
+    {
+       
+        int choice = getIntInput(scanner); // Gets integer input from the user.
+        return choice == 1; // Returns true if the user chooses to play again.
+   
+    }
+
+    public static boolean checkWinner(char[][] board, char currentPlayer) // Checks if the current player has won.
+   
+    {
+       
+        return (board[0][0] == currentPlayer && board[0][1] == currentPlayer && board[0][2] == currentPlayer) || // Top row
+               (board[1][0] == currentPlayer && board[1][1] == currentPlayer && board[1][2] == currentPlayer) || // Middle row
+               (board[2][0] == currentPlayer && board[2][1] == currentPlayer && board[2][2] == currentPlayer) || // Bottom row
+               (board[0][0] == currentPlayer && board[1][0] == currentPlayer && board[2][0] == currentPlayer) || // Left column
+               (board[0][1] == currentPlayer && board[1][1] == currentPlayer && board[2][1] == currentPlayer) || // Middle column
+               (board[0][2] == currentPlayer && board[1][2] == currentPlayer && board[2][2] == currentPlayer) || // Right column
+               (board[0][0] == currentPlayer && board[1][1] == currentPlayer && board[2][2] == currentPlayer) || // Diagonal
+               (board[0][2] == currentPlayer && board[1][1] == currentPlayer && board[2][0] == currentPlayer); // Anti-diagonal
+   
+    }
+
+}
