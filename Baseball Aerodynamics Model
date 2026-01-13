@@ -1,0 +1,302 @@
+import matplotlib
+
+matplotlib.use('TkAgg')  # interactive window
+import matplotlib.pyplot as plt
+
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+# Physical constants
+
+mass_of_ball = 0.145  # Mass of the baseball in kilograms
+acceleration_due_to_gravity = 9.81  # Acceleration due to gravity in m/s^2
+radius_of_ball = 0.0366  # Radius of the baseball in meters
+cross_sectional_area = np.pi * radius_of_ball ** 2
+
+# Vector helper functions
+
+def unit_vector(vector):
+    magnitude = np.linalg.norm(vector)
+
+    if magnitude == 0:
+        return np.array([0.0, 0.0, 0.0])
+
+    return vector / magnitude
+
+def perpendicular_vector(vector):
+    return np.cross(np.array([0.0, 1.0, 0.0]), vector)
+
+# Air density model
+
+def air_density_at_height(vertical_position, parameters):
+    base_density = parameters["air_density_at_ground"]
+    scale_height = parameters["atmospheric_scale_height"]
+    temperature = parameters["air_temperature"]
+
+    density = base_density * np.exp(-vertical_position / scale_height)
+    density = density * (293.15 / temperature)
+
+    return density
+
+# Forces acting on the ball
+
+def force_drag(relative_velocity, air_density, parameters):
+    speed = np.linalg.norm(relative_velocity)
+
+    drag_coefficient = parameters["drag_coefficient"]
+    drag_magnitude = 0.5 * air_density * drag_coefficient * cross_sectional_area * speed ** 2
+
+    drag_direction = unit_vector(relative_velocity)
+    return -drag_magnitude * drag_direction
+
+def force_magnus(relative_velocity, air_density, angular_velocity, parameters):
+    speed = np.linalg.norm(relative_velocity)
+
+    if speed == 0:
+        return np.array([0.0, 0.0, 0.0])
+
+    lift_constant = parameters["lift_coefficient_constant"]
+    lift_coefficient = lift_constant * (np.linalg.norm(angular_velocity) * 2 * radius_of_ball) / speed
+
+    magnus_magnitude = 0.5 * air_density * cross_sectional_area * lift_coefficient * speed ** 2
+    magnus_direction = unit_vector(np.cross(angular_velocity, relative_velocity))
+
+    return magnus_magnitude * magnus_direction
+
+def force_seam_effects(relative_velocity, air_density, time, parameters):
+    speed = np.linalg.norm(relative_velocity)
+
+    switch_time = parameters["seam_switch_time"]
+    phase = time / switch_time + parameters["seam_random_phase"]
+    direction_sign = np.sign(np.sin(phase))
+
+    direction = np.array([0.0, 0.0, direction_sign])
+
+    seam_strength = parameters["seam_force_strength"]
+    seam_force_magnitude = seam_strength * 0.5 * air_density * cross_sectional_area * speed ** 2
+
+    return seam_force_magnitude * direction
+
+
+def force_gravity():
+    return np.array([0.0, -mass_of_ball * acceleration_due_to_gravity, 0.0])
+
+# Net force calculation
+
+def total_force_on_ball(state, time, angular_velocity, parameters):
+    horizontal_velocity = state[3]
+    vertical_velocity = state[4]
+    sideways_velocity = state[5]
+
+    base_wind_horizontal = parameters["base_wind_horizontal"]
+    base_wind_vertical = parameters["base_wind_vertical"]
+    base_wind_sideways = parameters["base_wind_sideways"]
+
+    wind_velocity = np.array([
+        base_wind_horizontal,
+        base_wind_vertical,
+        base_wind_sideways
+    ])
+
+    ball_velocity = np.array([horizontal_velocity, vertical_velocity, sideways_velocity])
+    relative_velocity = ball_velocity - wind_velocity
+
+    air_density = air_density_at_height(state[1], parameters)
+
+    total_force = np.array([0.0, 0.0, 0.0])
+    total_force += force_drag(relative_velocity, air_density, parameters)
+    total_force += force_magnus(relative_velocity, air_density, angular_velocity, parameters)
+    # total_force += force_seam_effects(relative_velocity, air_density, time, parameters)
+    total_force += force_gravity()
+
+    return total_force
+
+# Equations of motion
+
+def state_derivatives(state, time, angular_velocity, parameters):
+    forces = total_force_on_ball(state, time, angular_velocity, parameters)
+
+    horizontal_acceleration = forces[0] / mass_of_ball
+    vertical_acceleration = forces[1] / mass_of_ball
+    sideways_acceleration = forces[2] / mass_of_ball
+
+    return np.array([
+        state[3],
+        state[4],
+        state[5],
+        horizontal_acceleration,
+        vertical_acceleration,
+        sideways_acceleration
+    ])
+
+# Time stepping simulation
+
+def simulate_trajectory(initial_state, angular_velocity, parameters):
+    time_step = parameters["time_step"]
+    maximum_time = parameters["maximum_simulation_time"]
+
+    current_state = initial_state.copy()
+    trajectory = []
+    current_time = 0.0
+
+    while current_time < maximum_time and current_state[1] >= 0:
+        trajectory.append(current_state.copy())
+        current_state = current_state + state_derivatives(
+            current_state, current_time, angular_velocity, parameters
+        ) * time_step
+        current_time += time_step
+
+    return np.array(trajectory)
+
+# Initial conditions
+
+def create_initial_state(parameters):
+    launch_angle_radians = np.deg2rad(parameters["launch_angle_degrees"])
+    launch_speed = parameters["initial_speed"]
+
+    return np.array([
+        parameters["initial_horizontal_position"],
+        parameters["initial_vertical_position"],
+        0.0,
+        launch_speed * np.cos(launch_angle_radians),
+        launch_speed * np.sin(launch_angle_radians),
+        0.0
+    ])
+
+# Model parameters
+
+parameters = {
+
+    # initial_horizontal_position is the horizontal location of the ball at the moment of release (m).
+    "initial_horizontal_position": 0.0,
+
+    # initial_vertical_position is the height of the ball above the ground at release (m).
+    "initial_vertical_position": 1.9,  # slightly higher, typical release height
+
+    # initial_speed is the magnitude of the ball’s velocity at release (m/s).
+    "initial_speed": 27.0,  # slower than normal pitch, realistic for knuckleball
+
+    # launch_angle_degrees is the angle of the velocity vector relative to horizontal at release (degrees).
+    "launch_angle_degrees": 2.5,  # flatter trajectory typical of knuckleball pitches
+
+    # angular_spin_rate is the rotational speed of the ball used for Magnus force calculations (rad/s)
+    "angular_spin_rate": np.array([0.3, -0.25, 0.15]),  # near-zero spin with small wobble
+
+    # air_density_at_ground is the reference air density at ground level (kg/m^3).
+    "air_density_at_ground": 1.20,  # slightly variable but consistent with calm outdoor conditions
+
+    # atmospheric_scale_height controls how quickly air density decreases with altitude (m).
+    "atmospheric_scale_height": 8500.0,  # unchanged, physically realistic
+
+    # air_temperature is the ambient air temperature used to adjust air density (K).
+    "air_temperature": 295.0,  # mild day with a bit of warmth
+
+    # base_wind_horizontal is the steady horizontal wind speed (m/s).
+    "base_wind_horizontal": 0.8,  # gentle forward draft
+
+    # base_wind_vertical is the steady vertical wind speed (m/s).
+    "base_wind_vertical": -0.2,  # tiny downward draft
+
+    # base_wind_sideways is the steady sideways wind speed (m/s).
+    "base_wind_sideways": 1.2,  # mild lateral movement, enough for knuckleball flutter
+
+    # drag_coefficient controls the strength of aerodynamic drag (dimensionless).
+    "drag_coefficient": 0.25,  # slightly higher for knuckleball turbulence sensitivity
+
+    # lift_coefficient_constant sets how strongly spin generates Magnus lift (dimensionless).
+    "lift_coefficient_constant": 0.05,  # extremely low because Magnus effect is minimal
+
+    # seam_force_strength controls the magnitude of unsteady seam-induced forces (dimensionless).
+    "seam_force_strength": 0.50,  # increased so knuckleball has unpredictable movement
+
+    # seam_switch_time controls how long the flow stays asymmetric before switching (s).
+    "seam_switch_time": 0.5,  # faster switching for realistic fluttering behaviour
+
+    # seam_random_phase randomizes the initial seam orientation.
+    "seam_random_phase": np.random.uniform(0, 2 * np.pi),  # keep random
+
+    # time_step is the size of each numerical integration step (s).
+    "time_step": 0.0008,  # slightly finer resolution for chaotic behaviour
+
+    # maximum_simulation_time is the total duration of the simulation (s).
+    "maximum_simulation_time": 5.0  # unchanged
+
+}
+
+# ---- CREATE TRAJECTORY BEFORE PLOTTING ----
+initial_state = create_initial_state(parameters)
+angular_velocity = parameters["angular_spin_rate"]
+trajectory = simulate_trajectory(initial_state, angular_velocity, parameters)
+
+# Run simulation and plotting
+
+fig = plt.figure(figsize=(10, 6))
+ax = fig.add_subplot(111, projection="3d")
+
+# Trajectory
+x = trajectory[:, 0]   # forward to plate
+y = trajectory[:, 2]   # sideways break
+z = trajectory[:, 1]   # vertical height
+
+ax.plot(x, y, z, linewidth=2)
+
+# ---- PHYSICAL AXIS LIMITS (TRUTH) ----
+x_min, x_max = 0.0, 18.44  # unchanged length
+y_min, y_max = -1.75, 1.75  # wider tunnel
+z_min, z_max = 0.0, 2.0  # physical height now 2 m
+
+# ---- VISUAL TUNNEL (TALLER THAN PHYSICS) ----
+z_tunnel_min, z_tunnel_max = -0.5, 2.75
+
+vertices = np.array([
+    [x_min, y_min, z_tunnel_min],
+    [x_max, y_min, z_tunnel_min],
+    [x_max, y_max, z_tunnel_min],
+    [x_min, y_max, z_tunnel_min],
+    [x_min, y_min, z_tunnel_max],
+    [x_max, y_min, z_tunnel_max],
+    [x_max, y_max, z_tunnel_max],
+    [x_min, y_max, z_tunnel_max],
+])
+
+faces = [
+    [vertices[j] for j in [0, 1, 2, 3]],
+    [vertices[j] for j in [4, 5, 6, 7]],
+    [vertices[j] for j in [0, 1, 5, 4]],
+    [vertices[j] for j in [2, 3, 7, 6]],
+    [vertices[j] for j in [1, 2, 6, 5]],
+    [vertices[j] for j in [4, 7, 3, 0]],
+]
+
+tunnel = Poly3DCollection(
+    faces,
+    alpha=0.05,
+    edgecolor="gray"
+)
+ax.add_collection3d(tunnel)
+
+# Axis limits (unchanged)
+ax.set_xlim(x_min, x_max)
+ax.set_ylim(y_min, y_max)
+ax.set_zlim(z_min, z_max)
+
+# CLEANER tick spacing
+ax.set_xticks(np.arange(0, 18.5, 2.0))  # fewer x ticks
+ax.set_yticks(np.arange(-1.5, 1.6, 1.0))  # y every 1 m
+ax.set_zticks(np.arange(0.0, 2.01, 0.28571428571))  # z every 0.2857 m
+
+# ---- VISUAL PROPORTIONS (KEY) ----
+ax.set_box_aspect((18.44, 3.5, 4.0))  # taller + wider, NOT longer
+
+# ---- VIEW ----
+ax.view_init(elev=18, azim=-45)
+
+# Labels
+# ax.set_xlabel("Distance to Plate (m)")
+# ax.set_ylabel("Horizontal Break (m)")
+# ax.set_zlabel("Height (m)")
+# ax.set_title("Knuckleball Trajectory (Expanded Tunnel, High-Resolution Z)")
+
+ax.grid(True)
+plt.show()
